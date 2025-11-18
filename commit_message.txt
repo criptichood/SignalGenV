@@ -1,0 +1,16 @@
+feat: Add Supabase authentication integration
+
+- Implement Supabase authentication service with sign in/out functionality
+- Add Google OAuth sign-in capability
+- Create profile service for user profile management
+- Update main App component to use authenticated user from Supabase
+- Add session management utility to handle user sessions
+- Create AuthPage component with login/signup forms
+- Integrate authentication state with the global store
+- Update social store to use authenticated user instead of mock user
+- Add Tailwind config for proper styling
+- Include environment configuration for Supabase
+- Add authentication tests with Playwright
+- Update user interactions (follow, like, comment) to use authenticated user
+- Add profile update functionality
+- Refactor components to work with real user data from Supabase

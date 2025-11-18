@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import supabaseService from '@/services/supabaseService';
 import type { Page, ChatIconType, Theme, ThemeMode, ThemeAccent } from '@/types';
 
 interface AppState {
@@ -15,8 +16,10 @@ interface AppState {
 
   // Auth State
   isAuthenticated: boolean;
+  user: any | null;
   login: () => void;
   logout: () => void;
+  setAuthState: (isAuthenticated: boolean, user: any) => void;
 
   // UI State
   currentPage: Page;
@@ -44,7 +47,7 @@ interface AppState {
   setContextualChatEnabled: (enabled: boolean) => void;
   setFunctionCallingEnabled: (enabled: boolean) => void;
   setChatIcon: (icon: ChatIconType) => void;
-  
+
   // Onboarding State
   isTourActive: boolean;
   tourStep: number;
@@ -58,13 +61,14 @@ interface AppState {
 
 export const useStore = create<AppState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       // --- STATE & SETTERS ---
       bybitApiKey: '',
       bybitApiSecret: '',
       binanceApiKey: '',
       binanceApiSecret: '',
       isAuthenticated: false,
+      user: null,
       currentPage: 'dashboard',
       isSidebarOpen: false,
       isChatOpen: false,
@@ -84,8 +88,20 @@ export const useStore = create<AppState>()(
       setBybitApiSecret: (key) => set({ bybitApiSecret: key }),
       setBinanceApiKey: (key) => set({ binanceApiKey: key }),
       setBinanceApiSecret: (key) => set({ binanceApiSecret: key }),
-      login: () => set({ isAuthenticated: true }),
-      logout: () => set({ isAuthenticated: false, currentPage: 'dashboard' }), // Reset to dashboard on logout
+      login: () => set({ isAuthenticated: true }), // This will be kept for backward compatibility
+      logout: async () => {
+        try {
+          await supabaseService.signOut();
+        } catch (error) {
+          console.error('Error during logout:', error);
+        }
+        set({
+          isAuthenticated: false,
+          user: null,
+          currentPage: 'dashboard' // Reset to dashboard on logout
+        });
+      },
+      setAuthState: (isAuthenticated, user) => set({ isAuthenticated, user }),
       setCurrentPage: (page) => set({ currentPage: page }),
       setIsSidebarOpen: (isOpen) => set({ isSidebarOpen: isOpen }),
       setIsChatOpen: (isOpen) => set({ isChatOpen: isOpen }),
@@ -125,3 +141,13 @@ export const useStore = create<AppState>()(
     }
   )
 );
+
+// Initialize auth state listener
+supabaseService.onAuthStateChange((event, session) => {
+  const store = useStore.getState();
+  if (event === 'SIGNED_IN' || event === 'USER_UPDATED') {
+    store.setAuthState(true, session?.user || null);
+  } else if (event === 'SIGNED_OUT') {
+    store.setAuthState(false, null);
+  }
+});

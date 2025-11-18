@@ -33,6 +33,7 @@ import { Toast } from '@/components/ui/Toast';
 import { SharePostModal } from '@/components/messages/SharePostModal';
 import { ViewPostModal } from '@/components/profile/ViewPostModal';
 import { OnboardingTour } from '@/components/onboarding/OnboardingTour';
+import { sessionManager } from '@/utils/sessionManager';
 
 export default function App() {
   const {
@@ -48,7 +49,7 @@ export default function App() {
     setCurrentPage, setIsSidebarOpen,
     setIsChatOpen, setToast, startTour
   } = useStore();
-  
+
   const {
     users, posts,
     setConversations, setNotifications, setPostToView, setPostToShare,
@@ -57,22 +58,45 @@ export default function App() {
     handleCreateStrategy, handleCreatePost,
     handleSharePost, handleShareSignalAsPost,
   } = useSocialStore();
-  
+
   const { pruneOldScans } = useScreenerStore();
 
-  const currentUser = useMemo(() => users?.find(u => u.username === 'CryptoTrader123'), [users]);
-  
+  // Use the authenticated user from the store instead of mock user
+  const { user } = useStore();
+  const currentUser = useMemo(() => {
+    // If we have an authenticated user from Supabase, create a basic profile
+    if (user) {
+      return {
+        username: user.user_metadata?.user_name || user.email?.split('@')[0] || user.id,
+        name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+        bio: user.user_metadata?.bio || 'AI Trading Enthusiast',
+        avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
+        joinedAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
+        followers: [],
+        following: [],
+        isVerified: false,
+      };
+    }
+    // Fallback to mock user if no authenticated user
+    return users?.find(u => u.username === 'CryptoTrader123') || null;
+  }, [user, users]);
+
+  // Initialize session on app load
+  useEffect(() => {
+    sessionManager.initializeSession();
+  }, []);
+
   // Apply theme changes to the DOM
   useEffect(() => {
     const themeName = `${theme.mode}-${theme.accent}`;
     document.documentElement.dataset.theme = themeName;
   }, [theme]);
-  
+
   // Prune old screener runs on initial app load
   useEffect(() => {
     pruneOldScans();
   }, [pruneOldScans]);
-  
+
   // Start tour on first visit after login
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -174,7 +198,7 @@ export default function App() {
     signal: currentPage === 'signal-gen' ? signalGenState.signal : currentPage === 'scalping' ? scalpState.signal : null,
     params: currentPage === 'signal-gen' ? signalGenState.currentParams : currentPage === 'scalping' ? scalpState.currentParams : null,
   };
-  
+
   const chatController = useChat(
     pageContext,
     signalGenerator.triggerSignalGeneration,
@@ -187,14 +211,14 @@ export default function App() {
   if (!isAuthenticated) {
     return <AuthPage onAuthSuccess={login} />;
   }
-  
+
   const renderPage = () => {
     switch (currentPage) {
       case 'dashboard':
         return <DashboardPage />;
       case 'signal-gen':
         return (
-          <SignalGenPage 
+          <SignalGenPage
             bybitApiKey={bybitApiKey}
             bybitApiSecret={bybitApiSecret}
             controller={signalGenerator.signalGenController}
@@ -215,7 +239,7 @@ export default function App() {
       case 'memes-scalp':
         return <MemesScalpPage />;
       case 'screener':
-        return <ScreenerPage 
+        return <ScreenerPage
             onGenerateSignal={signalGenerator.triggerSignalGeneration}
             onGenerateScalp={signalGenerator.triggerScalpGeneration}
         />;
@@ -259,19 +283,19 @@ export default function App() {
       {isTourActive && <OnboardingTour />}
       {toast && <Toast message={toast.message} variant={toast.variant} onClose={() => setToast(null)} />}
       <Sidebar />
-      
+
       <div className="flex-1 flex flex-col min-w-0 lg:ml-64">
-        <Header 
+        <Header
           onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
         />
-        
+
         <main className="flex-1 p-4 lg:p-6 overflow-y-auto">
           {renderPage()}
         </main>
       </div>
 
       {currentUser && (
-        <ChatWidget 
+        <ChatWidget
             isOpen={isChatOpen}
             onClose={() => setIsChatOpen(false)}
             onOpen={() => setIsChatOpen(true)}
@@ -282,7 +306,7 @@ export default function App() {
             onNavigate={setCurrentPage}
         />
       )}
-      
+
       <SharePostModal
         isOpen={!!postToShare}
         onClose={() => setPostToShare(null)}

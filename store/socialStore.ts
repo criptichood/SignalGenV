@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useStore } from '@/store';
+import { profileService } from '../services';
 import type { UserProfile, UserPost, Strategy, DirectMessageConversation, DirectMessage, Notification, Comment, SavedSignal, Page, TradeIdea, AIFeedback } from '@/types';
 import { MOCK_USERS, MOCK_POSTS, MOCK_STRATEGIES, MOCK_CONVERSATIONS, MOCK_NOTIFICATIONS } from '@/data/mockData';
 
@@ -42,7 +44,7 @@ interface SocialState {
   setStrategies: (updater: Strategy[] | ((prev: Strategy[]) => Strategy[])) => void;
   setConversations: (updater: DirectMessageConversation[] | ((prev: DirectMessageConversation[]) => DirectMessageConversation[])) => void;
   setNotifications: (updater: Notification[] | ((prev: Notification[]) => Notification[])) => void;
-  
+
   // UI State
   viewingProfileUsername: string | null;
   activeConversationId: string | null;
@@ -58,7 +60,7 @@ interface SocialState {
   setPendingMessage: (msg: { conversationId: string; content: string } | null) => void;
   setSignalToAttach: (signal: SavedSignal | null) => void;
   setTradeIdeaToAttach: (idea: SocialState['tradeIdeaToAttach']) => void;
-  
+
   // Actions
   handleFollow: (usernameToFollow: string) => void;
   handleUnfollow: (usernameToUnfollow: string) => void;
@@ -101,7 +103,7 @@ export const useSocialStore = create<SocialState>()(
       setStrategies: (updater) => set(state => ({ strategies: typeof updater === 'function' ? updater(state.strategies) : updater })),
       setConversations: (updater) => set(state => ({ conversations: typeof updater === 'function' ? updater(state.conversations) : updater })),
       setNotifications: (updater) => set(state => ({ notifications: typeof updater === 'function' ? updater(state.notifications) : updater })),
-      
+
       setViewingProfileUsername: (username) => set({ viewingProfileUsername: username }),
       setActiveConversationId: (id) => set({ activeConversationId: id }),
       setPostToShare: (post) => set({ postToShare: post }),
@@ -113,46 +115,84 @@ export const useSocialStore = create<SocialState>()(
       // --- ACTIONS ---
       handleFollow: (usernameToFollow) => {
         const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        // Get current user from store which should now reflect authenticated user
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         set(state => ({
           users: state.users.map(user => {
-            if (user.username === currentUser.username) return { ...user, following: [...user.following, usernameToFollow] };
-            if (user.username === usernameToFollow) return { ...user, followers: [...user.followers, currentUser.username] };
+            if (user.username === currentUserUsername) return { ...user, following: [...user.following, usernameToFollow] };
+            if (user.username === usernameToFollow) return { ...user, followers: [...user.followers, currentUserUsername] };
             return user;
           })
         }));
       },
       handleUnfollow: (usernameToUnfollow) => {
         const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         set(state => ({
           users: state.users.map(user => {
-            if (user.username === currentUser.username) return { ...user, following: user.following.filter(u => u !== usernameToUnfollow) };
-            if (user.username === usernameToUnfollow) return { ...user, followers: user.followers.filter(u => u !== currentUser.username) };
+            if (user.username === currentUserUsername) return { ...user, following: user.following.filter(u => u !== usernameToUnfollow) };
+            if (user.username === usernameToUnfollow) return { ...user, followers: user.followers.filter(u => u !== currentUserUsername) };
             return user;
           })
         }));
       },
-      handleSaveProfile: (updatedProfile) => {
+      handleSaveProfile: async (updatedProfile) => {
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        // Update profile in Supabase
+        const { error } = await profileService.updateProfile(currentAuthUser.id, updatedProfile);
+        if (error) {
+          console.error('Error updating profile:', error);
+          return;
+        }
+
+        // Update in local store
         set(state => ({ users: state.users.map(u => u.username === updatedProfile.username ? updatedProfile : u) }));
       },
       handleCreateStrategy: (strategyData) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
-        const newStrategy: Strategy = { ...strategyData, id: crypto.randomUUID(), authorUsername: currentUser.username, createdAt: Date.now() };
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
+        const newStrategy: Strategy = { ...strategyData, id: crypto.randomUUID(), authorUsername: currentUserUsername, createdAt: Date.now() };
         set(state => ({ strategies: [newStrategy, ...state.strategies] }));
       },
       handleCreatePost: (postData) => {
         const { users, signalToAttach, tradeIdeaToAttach } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
+        // Find current user in local state to get name/avatar
+        const currentUser = users?.find(u => u.username === currentUserUsername) || {
+          username: currentUserUsername,
+          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
+        };
+
         const newPost: UserPost = {
           ...postData,
           id: crypto.randomUUID(),
-          author: { username: currentUser.username, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' },
+          author: {
+            username: currentUser.username,
+            name: currentUser.name,
+            avatarUrl: currentUser.avatarUrl || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${currentUser.username}`
+          },
           createdAt: Date.now(),
           likedBy: [],
           repostedBy: [],
@@ -168,9 +208,12 @@ export const useSocialStore = create<SocialState>()(
         set(state => ({ posts: state.posts.filter(post => post.id !== postToDelete.id) }));
       },
       handleLikePost: (postToLike) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         set(state => ({
           posts: state.posts.map(post => {
             if (post.id === postToLike.id || post.repostOf?.id === postToLike.id) {
@@ -178,8 +221,8 @@ export const useSocialStore = create<SocialState>()(
               // Update the original post
               const updateOriginal = (p: UserPost) => {
                   if (p.id === originalPostId) {
-                      const isLiked = p.likedBy.includes(currentUser.username);
-                      const newLikedBy = isLiked ? p.likedBy.filter(u => u !== currentUser.username) : [...p.likedBy, currentUser.username];
+                      const isLiked = p.likedBy.includes(currentUserUsername);
+                      const newLikedBy = isLiked ? p.likedBy.filter(u => u !== currentUserUsername) : [...p.likedBy, currentUserUsername];
                       return { ...p, likedBy: newLikedBy };
                   }
                   return p;
@@ -191,34 +234,72 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
       handleRepost: (postToRepost) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         const originalPost = postToRepost.repostOf || postToRepost;
+        const currentAuthUserInState = get().users?.find(u => u.username === currentUserUsername) || {
+          username: currentUserUsername,
+          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
+        };
+
         const repost: UserPost = {
-          id: crypto.randomUUID(), author: { username: currentUser.username, name: currentUser.name, avatarUrl: currentUser.avatarUrl || '' }, content: originalPost.content,
-          repostOf: originalPost, createdAt: Date.now(), likedBy: [], repostedBy: [], commentCount: 0, comments: [], mediaUrl: originalPost.mediaUrl, linkPreviewUrl: originalPost.linkPreviewUrl
+          id: crypto.randomUUID(),
+          author: {
+            username: currentAuthUserInState.username,
+            name: currentAuthUserInState.name,
+            avatarUrl: currentAuthUserInState.avatarUrl || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${currentAuthUserInState.username}`
+          },
+          content: originalPost.content,
+          repostOf: originalPost,
+          createdAt: Date.now(),
+          likedBy: [],
+          repostedBy: [],
+          commentCount: 0,
+          comments: [],
+          mediaUrl: originalPost.mediaUrl,
+          linkPreviewUrl: originalPost.linkPreviewUrl
         };
         set(state => {
           const newPosts = [repost, ...state.posts];
-          return { posts: newPosts.map(p => p.id === originalPost.id ? { ...p, repostedBy: [...(p.repostedBy || []), currentUser.username] } : p) };
+          return { posts: newPosts.map(p => p.id === originalPost.id ? { ...p, repostedBy: [...(p.repostedBy || []), currentUserUsername] } : p) };
         });
       },
       handleUndoRepost: (originalPost) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         set(state => {
-          const postsWithoutRepost = state.posts.filter(p => !(p.repostOf?.id === originalPost.id && p.author.username === currentUser.username));
-          return { posts: postsWithoutRepost.map(p => p.id === originalPost.id ? { ...p, repostedBy: (p.repostedBy || []).filter(username => username !== currentUser.username) } : p) };
+          const postsWithoutRepost = state.posts.filter(p => !(p.repostOf?.id === originalPost.id && p.author.username === currentUserUsername));
+          return { posts: postsWithoutRepost.map(p => p.id === originalPost.id ? { ...p, repostedBy: (p.repostedBy || []).filter(username => username !== currentUserUsername) } : p) };
         });
       },
       handleAddComment: (postId, content, parentId) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
+        const currentAuthUserInState = get().users?.find(u => u.username === currentUserUsername) || {
+          username: currentUserUsername,
+          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
+        };
+
         const newComment: Comment = {
-          id: crypto.randomUUID(), user: { username: currentUser.username, avatarUrl: currentUser.avatarUrl || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${currentUser.username}` },
+          id: crypto.randomUUID(),
+          user: {
+            username: currentAuthUserInState.username,
+            avatarUrl: currentAuthUserInState.avatarUrl || `https://api.dicebear.com/8.x/pixel-art/svg?seed=${currentAuthUserInState.username}`
+          },
           content, createdAt: Date.now(), likedBy: [], replies: [],
         };
         set(state => ({
@@ -232,15 +313,18 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
       handleLikeComment: (postId, commentId) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         set(state => ({
           posts: state.posts.map(post => {
             if (post.id === postId) {
               const updatedComments = updateCommentRecursively(post.comments, commentId, (comment) => {
-                const isLiked = comment.likedBy.includes(currentUser.username);
-                const newLikedBy = isLiked ? comment.likedBy.filter(u => u !== currentUser.username) : [...comment.likedBy, currentUser.username];
+                const isLiked = comment.likedBy.includes(currentUserUsername);
+                const newLikedBy = isLiked ? comment.likedBy.filter(u => u !== currentUserUsername) : [...comment.likedBy, currentUserUsername];
                 return { ...comment, likedBy: newLikedBy };
               });
               return { ...post, comments: updatedComments };
@@ -250,33 +334,45 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
       findOrCreateConversation: (username) => {
-        const { users, conversations } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) {
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) {
             throw new Error("Cannot find or create conversation without a current user.");
         }
-        let convo = conversations.find(c => c.participantUsernames.includes(username) && c.participantUsernames.includes(currentUser.username));
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) {
+            throw new Error("Cannot find current user username.");
+        }
+
+        const { users, conversations } = get();
+        let convo = conversations.find(c => c.participantUsernames.includes(username) && c.participantUsernames.includes(currentUserUsername));
         if (!convo) {
-            const newConvo: DirectMessageConversation = { id: crypto.randomUUID(), participantUsernames: [currentUser.username, username], messages: [] };
+            const newConvo: DirectMessageConversation = { id: crypto.randomUUID(), participantUsernames: [currentUserUsername, username], messages: [] };
             set(state => ({ conversations: [newConvo, ...state.conversations] }));
             return newConvo;
         }
         return convo;
       },
       handleSendMessage: (receiverUsername, content) => {
-        const { users } = get();
-        const currentUser = users?.find(u => u.username === 'CryptoTrader123');
-        if (!currentUser) return;
-        const newMessage: DirectMessage = { id: crypto.randomUUID(), senderUsername: currentUser.username, content, timestamp: Date.now(), isRead: false };
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
+        const newMessage: DirectMessage = { id: crypto.randomUUID(), senderUsername: currentUserUsername, content, timestamp: Date.now(), isRead: false };
         const convo = get().findOrCreateConversation(receiverUsername);
         set(state => ({
           conversations: state.conversations.map(c => c.id === convo.id ? { ...c, messages: [...c.messages, newMessage] } : c)
         }));
       },
       handleOpenMessage: (username, setPage) => {
-        const { users } = get();
-        if (!users?.find(u => u.username === 'CryptoTrader123')) return;
-        
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
+
         const convo = get().findOrCreateConversation(username);
         set({ activeConversationId: convo.id });
         setPage('messages');
@@ -287,9 +383,14 @@ export const useSocialStore = create<SocialState>()(
         }));
       },
       handleSharePost: (receiverUsername, setPage) => {
-        const { users, postToShare, findOrCreateConversation, setPendingMessage, setActiveConversationId, setPostToShare } = get();
+        const { postToShare, findOrCreateConversation, setPendingMessage, setActiveConversationId, setPostToShare } = get();
         if (!postToShare) return;
-        if (!users?.find(u => u.username === 'CryptoTrader123')) return;
+
+        const currentAuthUser = useStore.getState().user;
+        if (!currentAuthUser) return;
+
+        const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
+        if (!currentUserUsername) return;
 
         const postUrl = new URL(`#/posts/${postToShare.id}`, window.location.href).href;
         const messageContent = `Check out this post: ${postUrl}`;
