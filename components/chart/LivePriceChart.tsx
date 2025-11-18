@@ -34,7 +34,7 @@ export const LivePriceChart = ({
   const chartContainerRef = useRef<HTMLDivElement>(null);
   const priceLinesRef = useRef<Record<string, IPriceLine>>({});
   const livePositionLinesRef = useRef<Record<string, { tpLine?: IPriceLine; slLine?: IPriceLine; position: LivePosition }>>({});
-  
+
   // Component-local state for UI settings, ensuring independence between instances
   const [chartType, setChartType] = useState<'Area' | 'Line' | 'Candlestick'>('Area');
   const [timeRange, setTimeRange] = useState<'30m' | '1h' | '4h' | '1D' | 'All'>('4h');
@@ -48,9 +48,9 @@ export const LivePriceChart = ({
   // Time range zoom handling
   useEffect(() => {
     if (!chart || data.length < 2) return;
-    if (timeRange === 'All') { 
-      chart.timeScale().fitContent(); 
-      return; 
+    if (timeRange === 'All') {
+      chart.timeScale().fitContent();
+      return;
     }
     const lastTime = data[data.length - 1].time;
     let secondsToGoBack = 0;
@@ -67,13 +67,17 @@ export const LivePriceChart = ({
   // Draw price lines for signals
   useEffect(() => {
     if (!mainSeries) return;
-    
+
     // Clear all existing lines to prevent duplicates
-    Object.values(priceLinesRef.current).forEach(line => { try { mainSeries.removePriceLine(line) } catch (e) {} });
+    Object.values(priceLinesRef.current).forEach(line => {
+      try {
+        if (mainSeries) mainSeries.removePriceLine(line)
+      } catch (e) {}
+    });
     priceLinesRef.current = {};
     Object.values(livePositionLinesRef.current).forEach(({ tpLine, slLine }) => {
-        if (tpLine) try { mainSeries.removePriceLine(tpLine) } catch (e) {}
-        if (slLine) try { mainSeries.removePriceLine(slLine) } catch (e) {}
+        if (tpLine) try { if (mainSeries) mainSeries.removePriceLine(tpLine) } catch (e) {}
+        if (slLine) try { if (mainSeries) mainSeries.removePriceLine(slLine) } catch (e) {}
     });
     livePositionLinesRef.current = {};
 
@@ -82,7 +86,7 @@ export const LivePriceChart = ({
     };
 
     const currentSymbol = symbol.split(' ')[0];
-    
+
     if (signal && signalParams && signalParams.symbol === currentSymbol) {
         priceLinesRef.current['entry'] = createLine(signal.entryRange[0], '#3b82f6', LineStyle.Dotted, 'Entry');
         priceLinesRef.current['sl'] = createLine(signal.stopLoss, '#ef4444', LineStyle.Dotted, 'SL');
@@ -115,13 +119,13 @@ export const LivePriceChart = ({
   useEffect(() => {
     const chartElement = chartContainerRef.current;
     if (!chartElement || !chart || !mainSeries || !onModifyPosition) return;
-    
+
     const handleMouseDown = (e: MouseEvent) => {
         const y = e.offsetY;
         const priceScale = mainSeries.priceScale();
         const price = mainSeries.coordinateToPrice(y);
         if (price === null) return;
-        
+
         let lineToDrag = null;
         for (const posId in livePositionLinesRef.current) {
             const { tpLine, slLine } = livePositionLinesRef.current[posId];
@@ -211,11 +215,11 @@ export const LivePriceChart = ({
 
     const stopDistance = currentPrice * 0.002; // Default 0.2% SL
     const tpDistance = stopDistance * 1.5; // Default 1.5 R:R
-    
+
     const isLong = direction === 'Buy';
     const stopLoss = isLong ? currentPrice - stopDistance : currentPrice + stopDistance;
     const takeProfit = isLong ? currentPrice + tpDistance : currentPrice - tpDistance;
-    
+
     const quantity = (oneClickTradeMargin * 20) / currentPrice; // Assume 20x leverage for quick trades
 
     const tradeDetails: BybitTradeDetails = {
@@ -247,7 +251,7 @@ export const LivePriceChart = ({
           )}
         </div>
         <div className="mt-4">
-          <ChartControls 
+          <ChartControls
               chartType={chartType} setChartType={setChartType}
               timeRange={timeRange} setTimeRange={setTimeRange}
               showMA20={showMA20} setShowMA20={setShowMA20}

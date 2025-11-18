@@ -11,6 +11,7 @@ import { useSymbolsQuery } from '../hooks/useSymbolsQuery';
 import { useChartDataQuery } from '../hooks/useChartDataQuery';
 import { useHistoryStore } from '../store/historyStore';
 import { ScalpingLayout } from '@/components/scalping/ScalpingLayout';
+import { chartConnectionManager } from '@/services/chartConnectionManager';
 
 interface ScalpingPageProps {
   bybitApiKey: string;
@@ -55,28 +56,36 @@ export default function ScalpingPage({
   } = scalpingStore;
 
   const { data: symbols = [] } = useSymbolsQuery(formData.exchange);
-  
-  const { data: initialChartData, isLoading: isChartLoading } = useChartDataQuery(formData.exchange, formData.symbol);
 
-  const [chartData, setChartData] = useState<CandleStick[]>([]);
+  const { data: initialChartData, isLoading: isChartLoadingInitial } = useChartDataQuery(formData.exchange, formData.symbol);
+
+  const [chartData, setChartData] = useState<CandleStick[]>(initialChartData || []);
   const [orderBookData, setOrderBookData] = useState<OrderBookUpdate | null>(null);
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
-  
+  const [isChartLoading, setIsChartLoading] = useState(isChartLoadingInitial);
+
   const { isAnalyzing, signal, currentParams, generationTimestamp, lastDataTimestamp, error } = generationState;
-  
+
+  // Update chart data from query when it changes
   useEffect(() => {
-    if (initialChartData) setChartData(initialChartData);
+    if (initialChartData) {
+      setChartData(initialChartData);
+    }
   }, [initialChartData]);
-  
+
+  // Reset order book and live trades when symbol/exchange changes
   useEffect(() => {
     setOrderBookData(null);
     setLiveTrades([]);
   }, [formData.symbol, formData.exchange]);
-  
+
   const livePrice = chartData.length > 0 ? chartData[chartData.length - 1].close : null;
 
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'kline', interval: '1m',
+  const klineWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'kline',
+    interval: '1m',
     onMessage: (candle) => {
       setChartData(prevData => {
         const lastCandle = prevData[prevData.length - 1];
@@ -89,20 +98,88 @@ export default function ScalpingPage({
         }
       });
     },
-    onConnectionError: (message) => setToast({ message, variant: 'warning' }), enabled: !!formData.symbol && !!formData.exchange,
+    onConnectionError: (message) => setToast({ message, variant: 'warning' }),
+    enabled: !!formData.symbol && !!formData.exchange,
   });
-  
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'depth',
-    onMessage: (data) => { if (data && 'bids' in data && 'asks' in data) setOrderBookData(data as OrderBookUpdate); },
-    onConnectionError: (message) => setToast({ message, variant: 'warning' }), enabled: !!formData.symbol && !!formData.exchange && scalpingStore.windowsState.orderBook.isOpen,
+
+  const depthWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'depth',
+    onMessage: (data) => {
+      if (data && 'bids' in data && 'asks' in data) setOrderBookData(data as OrderBookUpdate);
+    },
+    onConnectionError: (message) => setToast({ message, variant: 'warning' }),
+    enabled: !!formData.symbol && !!formData.exchange && scalpingStore.windowsState.orderBook.isOpen,
   });
-  
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'trade',
-    onMessage: (trade) => { const newTrades = Array.isArray(trade) ? trade : [trade]; setLiveTrades(prev => [...newTrades, ...prev].slice(0, MAX_LIVE_TRADES)); },
-    onConnectionError: (message) => setToast({ message, variant: 'warning' }), enabled: !!formData.symbol && !!formData.exchange && scalpingStore.windowsState.timeAndSales.isOpen,
+
+  const tradeWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'trade',
+    onMessage: (trade) => {
+      const newTrades = Array.isArray(trade) ? trade : [trade];
+      setLiveTrades(prev => [...newTrades, ...prev].slice(0, MAX_LIVE_TRADES));
+    },
+    onConnectionError: (message) => setToast({ message, variant: 'warning' }),
+    enabled: !!formData.symbol && !!formData.exchange && scalpingStore.windowsState.timeAndSales.isOpen,
   });
+
+  // Manage WebSocket lifecycle with chart connection manager
+  useEffect(() => {
+    const exchange = formData.exchange;
+    const symbol = formData.symbol;
+
+    if (exchange && symbol) {
+      // Check if we can reuse an existing connection
+      if (chartConnectionManager.isConnectionActive(exchange, symbol, '1m')) {
+        const cachedData = chartConnectionManager.getCachedData(exchange, symbol, '1m');
+        if (cachedData) {
+          setChartData(cachedData);
+        }
+      }
+
+      // Register the connection when it's active
+      const unsubscribe = () => {
+        klineWebSocket && klineWebSocket();
+      };
+      chartConnectionManager.registerConnection(exchange, symbol, '1m', chartData, unsubscribe);
+
+      // Update connection status
+      if (klineWebSocket) {
+        chartConnectionManager.activateConnection(exchange, symbol, '1m');
+      } else {
+        chartConnectionManager.deactivateConnection(exchange, symbol, '1m');
+      }
+
+      // Cleanup function
+      return () => {
+        chartConnectionManager.deactivateConnection(exchange, symbol, '1m');
+        chartConnectionManager.cleanupInactiveConnections(2000); // Clean up after 2 seconds
+      };
+    }
+  }, [formData.exchange, formData.symbol, klineWebSocket, chartData]);
+
+  // Handle chart loading state with transition
+  useEffect(() => {
+    setIsChartLoading(isChartLoadingInitial);
+
+    // Add a small delay to allow transitions to complete
+    const timer = setTimeout(() => {
+      if (isChartLoadingInitial) {
+        setIsChartLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [isChartLoadingInitial]);
+
+  // Update cached data when chart data changes
+  useEffect(() => {
+    if (formData.exchange && formData.symbol && chartData.length > 0) {
+      chartConnectionManager.updateCachedData(formData.exchange, formData.symbol, '1m', chartData);
+    }
+  }, [chartData, formData.exchange, formData.symbol]);
 
   useEffect(() => {
     if (generationState.signal && !generationState.isAnalyzing) {

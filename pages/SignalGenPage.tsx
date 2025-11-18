@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Page, UserParams, Signal, SavedSignal, AiModel, CandleStick, OrderBookUpdate, LiveTrade } from '@/types';
 import { useStore } from '@/store';
 import { useSignalGenStore } from '@/store/signalGenStore';
@@ -11,6 +11,7 @@ import { useSignalHitDetection } from '@/hooks/useSignalHitDetection';
 import type { SignalGenerationState } from '@/hooks/useSignalGenerator';
 import { AI_MODELS } from '@/constants';
 import { SignalGenLayout } from '@/components/signal-gen/SignalGenLayout';
+import { chartConnectionManager } from '@/services/chartConnectionManager';
 
 interface SignalGenPageProps {
   bybitApiKey: string;
@@ -43,28 +44,36 @@ export default function SignalGenPage({
     isCurrentSignalExecuted, setIsCurrentSignalExecuted,
     setIsNewSignal, setIsControlsOpen, windowsState
   } = useSignalGenStore();
-  
-  const { data: symbols = [], error: symbolsQueryError } = useSymbolsQuery(formData.exchange);
-  const { data: initialChartData, isLoading: isChartLoading, error: chartDataError } = useChartDataQuery(formData.exchange, formData.symbol);
 
-  const [chartData, setChartData] = useState<CandleStick[]>([]);
+  const { data: symbols = [], error: symbolsQueryError } = useSymbolsQuery(formData.exchange);
+  const { data: initialChartData, isLoading: isChartLoadingInitial, error: chartDataError } = useChartDataQuery(formData.exchange, formData.symbol);
+
+  const [chartData, setChartData] = useState<CandleStick[]>(initialChartData || []);
   const [orderBookData, setOrderBookData] = useState<OrderBookUpdate | null>(null);
   const [liveTrades, setLiveTrades] = useState<LiveTrade[]>([]);
-  
+  const [isChartLoading, setIsChartLoading] = useState(isChartLoadingInitial);
+
+  // Update chart data from query when it changes
   useEffect(() => {
-    if (initialChartData) setChartData(initialChartData);
+    if (initialChartData) {
+      setChartData(initialChartData);
+    }
   }, [initialChartData]);
-  
+
+  // Reset order book and live trades when symbol/exchange changes
   useEffect(() => {
     setOrderBookData(null);
     setLiveTrades([]);
   }, [formData.symbol, formData.exchange]);
-  
+
   const { isAnalyzing, signal, currentParams, generationTimestamp, lastDataTimestamp, error } = generationState;
   const livePrice = chartData.length > 0 ? chartData[chartData.length - 1].close : null;
 
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'kline', interval: '1m',
+  const klineWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'kline',
+    interval: '1m',
     onMessage: (candle) => {
       setChartData(prevData => {
         const lastCandle = prevData[prevData.length - 1];
@@ -81,18 +90,87 @@ export default function SignalGenPage({
     enabled: !!formData.symbol && !!formData.exchange,
   });
 
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'depth',
-    onMessage: (data) => { if (data && 'bids' in data && 'asks' in data) { setOrderBookData(data as OrderBookUpdate); } },
-    onConnectionError: (message) => setToast({ message, variant: 'warning' }), enabled: !!formData.symbol && !!formData.exchange && windowsState.orderBook.isOpen,
+  const depthWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'depth',
+    onMessage: (data) => {
+      if (data && 'bids' in data && 'asks' in data) {
+        setOrderBookData(data as OrderBookUpdate);
+      }
+    },
+    onConnectionError: (message) => setToast({ message, variant: 'warning' }),
+    enabled: !!formData.symbol && !!formData.exchange && windowsState.orderBook.isOpen,
   });
-  
-  useExchangeWebSocket({
-    exchange: formData.exchange || 'binance', symbol: formData.symbol || 'BTCUSDT', type: 'trade',
-    onMessage: (trade) => { const newTrades = Array.isArray(trade) ? trade : [trade]; setLiveTrades(prev => [...newTrades, ...prev].slice(0, MAX_LIVE_TRADES)); },
-    onConnectionError: (message) => setToast({ message, variant: 'warning' }), enabled: !!formData.symbol && !!formData.exchange && windowsState.timeAndSales.isOpen,
+
+  const tradeWebSocket = useExchangeWebSocket({
+    exchange: formData.exchange || 'binance',
+    symbol: formData.symbol || 'BTCUSDT',
+    type: 'trade',
+    onMessage: (trade) => {
+      const newTrades = Array.isArray(trade) ? trade : [trade];
+      setLiveTrades(prev => [...newTrades, ...prev].slice(0, MAX_LIVE_TRADES));
+    },
+    onConnectionError: (message) => setToast({ message, variant: 'warning' }),
+    enabled: !!formData.symbol && !!formData.exchange && windowsState.timeAndSales.isOpen,
   });
-  
+
+  // Manage WebSocket lifecycle with chart connection manager
+  useEffect(() => {
+    const exchange = formData.exchange;
+    const symbol = formData.symbol;
+
+    if (exchange && symbol) {
+      // Check if we can reuse an existing connection
+      if (chartConnectionManager.isConnectionActive(exchange, symbol, '1m')) {
+        const cachedData = chartConnectionManager.getCachedData(exchange, symbol, '1m');
+        if (cachedData) {
+          setChartData(cachedData);
+        }
+      }
+
+      // Register the connection when it's active
+      const unsubscribe = () => {
+        klineWebSocket && klineWebSocket();
+      };
+      chartConnectionManager.registerConnection(exchange, symbol, '1m', chartData, unsubscribe);
+
+      // Update connection status
+      if (klineWebSocket) {
+        chartConnectionManager.activateConnection(exchange, symbol, '1m');
+      } else {
+        chartConnectionManager.deactivateConnection(exchange, symbol, '1m');
+      }
+
+      // Cleanup function
+      return () => {
+        chartConnectionManager.deactivateConnection(exchange, symbol, '1m');
+        chartConnectionManager.cleanupInactiveConnections(2000); // Clean up after 2 seconds
+      };
+    }
+  }, [formData.exchange, formData.symbol, klineWebSocket, chartData]);
+
+  // Handle chart loading state with transition
+  useEffect(() => {
+    setIsChartLoading(isChartLoadingInitial);
+
+    // Add a small delay to allow transitions to complete
+    const timer = setTimeout(() => {
+      if (isChartLoadingInitial) {
+        setIsChartLoading(false);
+      }
+    }, 150);
+
+    return () => clearTimeout(timer);
+  }, [isChartLoadingInitial]);
+
+  // Update cached data when chart data changes
+  useEffect(() => {
+    if (formData.exchange && formData.symbol && chartData.length > 0) {
+      chartConnectionManager.updateCachedData(formData.exchange, formData.symbol, '1m', chartData);
+    }
+  }, [chartData, formData.exchange, formData.symbol]);
+
   useEffect(() => {
     if (generationState.signal && !generationState.isAnalyzing) {
       setIsNewSignal(true);
@@ -130,7 +208,7 @@ export default function SignalGenPage({
       setToast({ message: `Error executing trade: ${error.message}`, variant: 'error' });
     }
   }, [bybitApiKey, bybitApiSecret, setToast, setIsCurrentSignalExecuted]);
-  
+
   const handleUpdateSignal = useCallback((updates: Partial<Signal>) => {
     if (generationState.signal && generationState.currentParams && generationState.generationTimestamp) {
         const newSignal = { ...generationState.signal, ...updates };
@@ -157,7 +235,7 @@ export default function SignalGenPage({
         forceLeverage: formData.forceLeverage || false, allowHighLeverage: formData.allowHighLeverage || false,
         customAiParams: formData.customAiParams || '',
     };
-    
+
     setFormData(() => restoredParams);
     setGenerationState({
         isAnalyzing: false, signal: signalToRestore, currentParams: restoredParams,
@@ -166,7 +244,7 @@ export default function SignalGenPage({
     });
     setToast({ message: `Restored signal view for ${signalToRestore.symbol}.`, variant: 'success'});
   }, [formData, setFormData, setGenerationState, setToast]);
-  
+
   const handleShare = () => {
     const historySignal = generationTimestamp ? signalHistory.find(s => s.timestamp === generationTimestamp) : null;
     if (!historySignal) { setToast({ message: 'Cannot share a transient signal.', variant: 'error'}); return; }

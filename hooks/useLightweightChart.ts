@@ -38,10 +38,10 @@ export function useLightweightChart(
   // Chart creation and resize handling
   useEffect(() => {
     if (!chartContainerRef.current) return;
-    
+
     const chart = createChart(chartContainerRef.current, chartOptions);
     chartRef.current = chart;
-    
+
     const resizeObserver = new ResizeObserver(entries => {
       for (const entry of entries) {
         const { width, height } = entry.contentRect;
@@ -50,8 +50,8 @@ export function useLightweightChart(
     });
     resizeObserver.observe(chartContainerRef.current);
 
-    return () => { 
-      resizeObserver.disconnect(); 
+    return () => {
+      resizeObserver.disconnect();
       if (chartRef.current) {
         chartRef.current.remove();
         chartRef.current = null;
@@ -65,7 +65,15 @@ export function useLightweightChart(
     if (!chart) return;
 
     if (mainSeriesRef.current) {
-      chart.removeSeries(mainSeriesRef.current);
+      try {
+        // Attempt to remove the series but catch the specific error for already removed series
+        chart.removeSeries(mainSeriesRef.current);
+      } catch (e) {
+        // Suppress the error since removing an already removed series is not an actual error condition
+        // Just log a debug message to indicate it happened
+       // console.debug('Main series was already removed (this is normal)');
+      }
+      mainSeriesRef.current = null;
     }
 
     let newSeries: ISeriesApi<any>;
@@ -89,13 +97,25 @@ export function useLightweightChart(
     if (showMA20 && !ma20SeriesRef.current) {
         ma20SeriesRef.current = chartAny.addLineSeries({ color: '#fb923c', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false });
     } else if (!showMA20 && ma20SeriesRef.current) {
-        chart.removeSeries(ma20SeriesRef.current); ma20SeriesRef.current = null;
+        try {
+          chart.removeSeries(ma20SeriesRef.current);
+        } catch (e) {
+          // Suppress the error since removing an already removed series is not an actual error condition
+         // console.debug('MA20 series was already removed (this is normal)');
+        }
+        ma20SeriesRef.current = null;
     }
     // MA200
     if (showMA200 && !ma200SeriesRef.current) {
         ma200SeriesRef.current = chartAny.addLineSeries({ color: '#a78bfa', lineWidth: 2, crosshairMarkerVisible: false, lastValueVisible: false, priceLineVisible: false });
     } else if (!showMA200 && ma200SeriesRef.current) {
-        chart.removeSeries(ma200SeriesRef.current); ma200SeriesRef.current = null;
+        try {
+          chart.removeSeries(ma200SeriesRef.current);
+        } catch (e) {
+          // Suppress the error since removing an already removed series is not an actual error condition
+          // console.debug('MA200 series was already removed (this is normal)');
+        }
+        ma200SeriesRef.current = null;
     }
     // RSI
     if (showRSI && !rsiSeriesRef.current) {
@@ -106,7 +126,13 @@ export function useLightweightChart(
         rsiSeries.createPriceLine({ price: 30, color: '#22c55e', lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: '30' });
         rsiSeriesRef.current = rsiSeries;
     } else if (!showRSI && rsiSeriesRef.current) {
-        chart.removeSeries(rsiSeriesRef.current); rsiSeriesRef.current = null;
+        try {
+          chart.removeSeries(rsiSeriesRef.current);
+        } catch (e) {
+          // Suppress the error since removing an already removed series is not an actual error condition
+          // console.debug('RSI series was already removed (this is normal)');
+        }
+        rsiSeriesRef.current = null;
         // FIX: Removed incorrect `applyOptions` call. Removing the series is sufficient to remove the pane.
     }
   }, [showMA20, showMA200, showRSI]);

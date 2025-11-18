@@ -6,6 +6,7 @@ import { LivePositions } from './LivePositions';
 import { DropdownMenu, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuContent } from '@/components/ui/DropdownMenu';
 import { LayoutIcon } from '@/components/icons/LayoutIcon';
 import { CheckIcon } from '@/components/icons/CheckIcon';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import type { CandleStick, Signal, UserParams, SavedSignal, LivePosition } from '@/types';
 import { BybitTradeDetails } from '@/services/executionService';
 
@@ -21,7 +22,7 @@ interface ScalpingDashboardProps {
   hitTpPricesForChart: number[];
   livePositions: LivePosition[];
   handleModifyPosition: (positionId: string, newTp?: number, newSl?: number) => Promise<void>;
-  
+
   // SignalCard props
   displaySignal: (Signal & { symbol: string; currentPrice: number; timestamp: number; type: "Scalp"; lastDataTimestamp?: number | undefined; }) | null;
   isAnalyzing: boolean;
@@ -76,7 +77,7 @@ export const ScalpingDashboard = (props: ScalpingDashboardProps) => {
 
     handleExecuteTrade(tradeDetails, mockSignal, currentParams);
   };
-  
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -93,22 +94,24 @@ export const ScalpingDashboard = (props: ScalpingDashboardProps) => {
         </DropdownMenu>
       </div>
 
-      <LivePriceChart
-        data={props.chartData}
-        symbol={props.symbol ? `${props.symbol} (${props.exchange})` : ''}
-        currentPrice={props.livePrice}
-        isLoading={props.isChartLoading}
-        signal={props.signal}
-        signalParams={props.currentParams}
-        hitTpLevels={props.hitTpPricesForChart}
-        oneClickTradingEnabled={props.oneClickTradingEnabled}
-        onOneClickTrade={handleOneClickTrade}
-        oneClickTradeMargin={props.currentParams?.margin}
-        onOneClickMarginChange={(margin) => props.setFormData(prev => ({...prev, margin}))}
-        isSubmittingOneClick={props.isAnalyzing}
-        livePositions={props.livePositions}
-        onModifyPosition={props.handleModifyPosition}
-      />
+      <ErrorBoundary>
+        <LivePriceChart
+          data={props.chartData}
+          symbol={props.symbol ? `${props.symbol} (${props.exchange})` : ''}
+          currentPrice={props.livePrice}
+          isLoading={props.isChartLoading}
+          signal={props.signal}
+          signalParams={props.currentParams}
+          hitTpLevels={props.hitTpPricesForChart}
+          oneClickTradingEnabled={props.oneClickTradingEnabled}
+          onOneClickTrade={handleOneClickTrade}
+          oneClickTradeMargin={props.currentParams?.margin}
+          onOneClickMarginChange={(margin) => props.setFormData(prev => ({...prev, margin}))}
+          isSubmittingOneClick={props.isAnalyzing}
+          livePositions={props.livePositions}
+          onModifyPosition={props.handleModifyPosition}
+        />
+      </ErrorBoundary>
 
       <SignalCard
         signal={props.displaySignal}

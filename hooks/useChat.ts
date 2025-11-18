@@ -7,8 +7,21 @@ import { generateChatTitle, generateSignalFunctionDeclaration, generateScalpingS
 import { MOCK_ANALYZED_NEWS } from '@/store/newsStore';
 import { tutorialsData } from '@/data/tutorialData';
 
+// Define the type for import.meta.env to resolve TypeScript error
+declare global {
+  interface ImportMeta {
+    env: Record<string, string>;
+  }
+}
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Get API key from environment - in browser, this will be processed by Vite
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.API_KEY;
+
+if (!API_KEY) {
+  console.error("Gemini API key is not set. Please set VITE_GEMINI_API_KEY in your .env file");
+}
+
+const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
 
 export function useChat(
   context: PageContext,
@@ -50,7 +63,7 @@ export function useChat(
   }, [conversations, currentConversationId, setCurrentConversationId, startNewConversation]);
 
   const currentConversation = conversations.find(c => c.id === currentConversationId) || null;
-  
+
   // Re-initialize chat instance when conversation or context changes
   useEffect(() => {
     if (currentConversation) {
@@ -84,7 +97,7 @@ export function useChat(
       })
     );
   }, [setConversations]);
-  
+
   const selectConversation = useCallback((id: string) => {
     setCurrentConversationId(id);
   }, [setCurrentConversationId]);
@@ -134,7 +147,7 @@ USER QUESTION:
 
     try {
       const stream = await chat.sendMessageStream({ message: fullPrompt });
-      
+
       let aggregatedText = '';
       let functionCalls: any[] = [];
       let finalChunk: any = null;
@@ -160,14 +173,14 @@ USER QUESTION:
             return { messages: newMessages };
           });
         }
-        
+
         // The library conveniently aggregates function calls, so we can keep using this.
         if (chunk.functionCalls) {
           functionCalls.push(...chunk.functionCalls);
         }
         finalChunk = chunk;
       }
-      
+
       const finalFunctionCalls = finalChunk?.functionCalls || functionCalls;
 
       if (finalFunctionCalls && finalFunctionCalls.length > 0) {
@@ -227,11 +240,11 @@ USER QUESTION:
             }
             break;
         }
-        
+
         const toolResponseResultStream = await chat.sendMessageStream({
           message: [ { functionResponse: { name: fc.name, response: { result: toolResultMessage } } } ],
         });
-        
+
         const toolResponsePlaceholder: ChatMessage = { role: 'model', content: '' };
         updateConversation(currentConversationId, c => ({ messages: [...c.messages, toolResponsePlaceholder] }));
 
@@ -267,7 +280,7 @@ USER QUESTION:
       console.error("Chat Error:", error);
       let friendlyMessage = "Sorry, an unexpected error occurred. Please try again later.";
       const errorMessage = error.message?.toLowerCase() || '';
-    
+
       if (errorMessage.includes('api_key')) {
         friendlyMessage = "There seems to be an issue with the API configuration. Please ensure everything is set up correctly.";
       } else if (errorMessage.includes('safety') || errorMessage.includes('blocked')) {
@@ -279,7 +292,7 @@ USER QUESTION:
       } else if (error.status >= 400) {
          friendlyMessage = "The AI model couldn't process that request. Please try again or rephrase your question.";
       }
-      
+
       updateConversation(currentConversationId, c => {
         const newMessages = [...c.messages];
         if (newMessages.length > 0) {
@@ -291,7 +304,7 @@ USER QUESTION:
       setIsLoading(false);
     }
   }, [currentConversationId, currentConversation, updateConversation, triggerSignalGeneration, triggerScalpGeneration, createStrategy, createPost, context, setToast]);
-  
+
 
   const editMessageAndResend = useCallback(async (messageIndex: number, newContent: string) => {
     if (!currentConversationId || !currentConversation) return;
@@ -301,14 +314,14 @@ USER QUESTION:
 
     const historyToResend = currentConversation.messages.slice(0, messageIndex);
     const updatedUserMessage: ChatMessage = { ...userMessageToEdit, content: newContent };
-    
+
     const newConvo: ChatConversation = {
       id: crypto.randomUUID(),
       title: 'Edited Chat',
       messages: [...historyToResend, updatedUserMessage],
       createdAt: Date.now(),
     };
-    
+
     setConversations(prev => [newConvo, ...prev]);
     setCurrentConversationId(newConvo.id);
 
@@ -317,7 +330,7 @@ USER QUESTION:
     }, 100);
 
   }, [currentConversationId, currentConversation, setConversations, setCurrentConversationId, sendMessage]);
-  
+
 
   return {
     conversations,

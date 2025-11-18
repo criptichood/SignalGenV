@@ -6,6 +6,7 @@ import { DropdownMenu, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuConten
 import { LayoutIcon } from '@/components/icons/LayoutIcon';
 import { CheckIcon } from '@/components/icons/CheckIcon';
 import { ErrorMessage } from '@/components/ErrorMessage';
+import ErrorBoundary from '@/components/ErrorBoundary';
 import type { CandleStick, Signal, UserParams, SavedSignal, Page } from '@/types';
 import { BybitTradeDetails } from '@/services/executionService';
 import { SignalGenerationState } from '@/hooks/useSignalGenerator';
@@ -25,7 +26,7 @@ interface SignalGenDashboardProps {
   signal: Signal | null;
   currentParams: UserParams | null;
   hitTpPricesForChart: number[];
-  
+
   // SignalCard props
   displaySignal: (Signal & { symbol: string; currentPrice: number; timestamp: number; type: "Swing"; lastDataTimestamp?: number | undefined; }) | null;
   isAnalyzing: boolean;
@@ -42,10 +43,10 @@ interface SignalGenDashboardProps {
 }
 
 export const SignalGenDashboard = (props: SignalGenDashboardProps) => {
-  const { 
-    isNewSignal, isCurrentSignalExecuted, 
-    windowsState, toggleWindow, 
-    setSelectedSignal, setIsModalOpen 
+  const {
+    isNewSignal, isCurrentSignalExecuted,
+    windowsState, toggleWindow,
+    setSelectedSignal, setIsModalOpen
   } = useSignalGenStore();
   const { formData } = useSignalGenStore();
 
@@ -64,24 +65,26 @@ export const SignalGenDashboard = (props: SignalGenDashboardProps) => {
           </DropdownMenuContent>
         </DropdownMenu>
       </div>
-      
+
       {props.error && <ErrorMessage message={props.error} onClose={() => props.setGenerationState({ error: null })} />}
       {props.symbolsQueryError && <ErrorMessage message={props.symbolsQueryError.message} onClose={() => {}} />}
       {props.chartDataError && <ErrorMessage message={`Failed to load chart data for ${formData.symbol}. Retrying...`} onClose={() => { }} />}
-      
-      <LivePriceChart
-        symbol={formData.symbol ? `${formData.symbol} (${formData.exchange})` : ''}
-        data={props.chartData}
-        currentPrice={props.livePrice}
-        isLoading={props.isChartLoading}
-        signal={props.signal}
-        signalParams={props.currentParams}
-        hitTpLevels={props.hitTpPricesForChart}
-      />
-      
-      <SignalCard 
-        signal={props.displaySignal} 
-        isLoading={props.isAnalyzing} 
+
+      <ErrorBoundary>
+        <LivePriceChart
+          symbol={formData.symbol ? `${formData.symbol} (${formData.exchange})` : ''}
+          data={props.chartData}
+          currentPrice={props.livePrice}
+          isLoading={props.isChartLoading}
+          signal={props.signal}
+          signalParams={props.currentParams}
+          hitTpLevels={props.hitTpPricesForChart}
+        />
+      </ErrorBoundary>
+
+      <SignalCard
+        signal={props.displaySignal}
+        isLoading={props.isAnalyzing}
         isNew={isNewSignal}
         onUpdateSignal={!props.isAnalyzing && props.signal ? props.handleUpdateSignal : undefined}
         currentParams={props.currentParams}

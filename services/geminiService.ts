@@ -3,7 +3,21 @@ import type { Signal, UserParams, PerpTrade, SpotTrade, TradeIdea, AIFeedback, O
 import { TRADING_KNOWLEDGE_CONTEXT, SCALPING_KNOWLEDGE_CONTEXT } from "./ai-prompts";
 import * as exchangeService from '@/services/exchangeService';
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Define the type for import.meta.env to resolve TypeScript error
+declare global {
+  interface ImportMeta {
+    env: Record<string, string>;
+  }
+}
+
+// Get API key from environment - in browser, this will be processed by Vite
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.API_KEY;
+
+if (!API_KEY) {
+  console.error("Gemini API key is not set. Please set VITE_GEMINI_API_KEY in your .env file");
+}
+
+const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
 
 // SYMBOLS_TO_SCAN constant for runMarketScreener
 const SYMBOLS_TO_SCAN = [
@@ -32,7 +46,7 @@ export async function generateSignal(params: UserParams): Promise<Signal> {
         exchangeService.fetchData(params.exchange, params.symbol, params.timeframe, 150),
         htf ? exchangeService.fetchData(params.exchange, params.symbol, htf, 100) : Promise.resolve(null),
     ]);
-    
+
     const livePrice = primaryData.length > 0 ? primaryData[primaryData.length - 1].close : 0;
     if (livePrice === 0) {
         throw new Error("Could not determine the current price from market data.");
@@ -40,7 +54,7 @@ export async function generateSignal(params: UserParams): Promise<Signal> {
 
     const prompt = `
         Analyze the following multi-timeframe market data to predict the next trading setup.
-        
+
         **User Parameters:**
         - Symbol: ${params.symbol}
         - Primary Timeframe: ${params.timeframe}
@@ -55,7 +69,7 @@ export async function generateSignal(params: UserParams): Promise<Signal> {
 
         Based on your predictive analysis, provide a trading signal in the specified JSON format.
     `;
-    
+
     const responseSchema = {
         type: Type.OBJECT,
         properties: {
@@ -96,7 +110,7 @@ export async function generateSignal(params: UserParams): Promise<Signal> {
     if (!signal.direction || !signal.entryRange || !signal.takeProfit || !signal.stopLoss) {
         throw new Error("Received malformed signal object from AI.");
     }
-    
+
     return signal;
 }
 
@@ -111,12 +125,12 @@ export async function generateScalpingSignal(params: UserParams, _: CandleStick[
     };
 
     const htfTimeframe = getHtfForScalp(params.timeframe as Timeframe);
-    
+
     const [ltfMarketData, htfMarketData] = await Promise.all([
         exchangeService.fetchData(params.exchange, params.symbol, params.timeframe, 150),
         exchangeService.fetchData(params.exchange, params.symbol, htfTimeframe, 100),
     ]);
-    
+
     const livePrice = ltfMarketData.length > 0 ? ltfMarketData[ltfMarketData.length - 1].close : 0;
     if (livePrice === 0) {
         throw new Error("Could not determine current price from market data.");
@@ -161,7 +175,7 @@ ${liveTrades.length > 0 ? JSON.stringify(liveTrades, null, 2) : 'Not available.'
         },
         required: ["direction", "entryRange", "takeProfit", "stopLoss", "confidence", "rrRatio", "leverage", "predictedMoveDuration", "reasoning", "biasSource", "predictionMode", "biasSummary"]
     };
-    
+
     const response = await ai.models.generateContent({
         model: params.model,
         contents: prompt,
@@ -225,7 +239,7 @@ export async function getSecondOpinion(tradeIdea: TradeIdea, marketData: CandleS
             responseSchema: secondOpinionSchema,
         },
     });
-    
+
     const jsonString = response.text.trim();
     const parsed = JSON.parse(jsonString) as AIFeedback;
     if (typeof parsed.confidence !== 'number' || !parsed.rationale) {
@@ -239,7 +253,7 @@ export async function getSecondOpinion(tradeIdea: TradeIdea, marketData: CandleS
  */
 export async function explainSignal(symbol: string, reasoning: string): Promise<string> {
     const prompt = `
-        As a trading educator, explain the concepts mentioned in the following trade analysis for ${symbol}. 
+        As a trading educator, explain the concepts mentioned in the following trade analysis for ${symbol}.
         Break down terms like Market Structure, Liquidity, Fair Value Gaps, or Order Blocks if they are mentioned.
         Keep the explanation clear, educational, and targeted at an intermediate trader.
         Format your response for readability in a plain text/markdown view using paragraphs and bullet points where appropriate.
@@ -305,7 +319,7 @@ export async function runMarketScreener(query: string): Promise<ScreenerResult[]
         Your Task:
         Analyze the provided list of symbols based on the user's query. Return a list of symbols that best match the criteria. For each symbol, provide a concise rationale.
     `;
-    
+
     const screenerSchema = {
         type: Type.ARRAY,
         items: {
@@ -317,7 +331,7 @@ export async function runMarketScreener(query: string): Promise<ScreenerResult[]
             required: ['symbol', 'rationale']
         }
     };
-    
+
     const response = await ai.models.generateContent({
         model: 'gemini-2.5-flash',
         contents: prompt,
@@ -334,6 +348,6 @@ export async function runMarketScreener(query: string): Promise<ScreenerResult[]
     if (!Array.isArray(results)) {
         throw new Error("AI returned a non-array response for the screener.");
     }
-    
+
     return results;
 }

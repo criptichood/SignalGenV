@@ -38,11 +38,11 @@ export function useSignalGenerator(
   const updateSignalGenerationState = useCallback((updates: Partial<SignalGenerationState>) => {
     setSignalGenerationState(prevState => ({ ...prevState, ...updates }));
   }, []);
-  
+
   useEffect(() => {
     updateSignalGenerationState({ isAnalyzing: signalMutation.isPending });
   }, [signalMutation.isPending, updateSignalGenerationState]);
-  
+
   const [scalpingGenerationState, setScalpingGenerationState] = useState<SignalGenerationState>({
     isAnalyzing: false, signal: null, currentParams: null, currentPrice: 0, generationTimestamp: null, lastDataTimestamp: null, error: null,
   });
@@ -78,9 +78,9 @@ export function useSignalGenerator(
 
       const livePrice = ltfMarketData.length > 0 ? ltfMarketData[ltfMarketData.length - 1].close : 0;
       updateScalpingGenerationState({ currentPrice: livePrice });
-      
+
       const generatedSignal = await generateScalpingSignal(params, [], [], extraData?.orderBookData ?? null, extraData?.liveTrades ?? []);
-      
+
       if (scalpCancellationRef.current) return;
       const timestamp = Date.now();
       updateScalpingGenerationState({ signal: generatedSignal, currentPrice: livePrice, lastDataTimestamp: null, generationTimestamp: timestamp });
@@ -113,41 +113,56 @@ export function useSignalGenerator(
       updateSignalGenerationState({ error: "Invalid AI model selected for generation." });
       return;
     }
-    
+
     updateSignalGenerationState({ signal: null, error: null, currentParams: newFormData as UserParams, generationTimestamp: null, lastDataTimestamp: null });
 
-    signalMutation.mutate(
-      { params: newFormData as UserParams, model },
-      {
-        onSuccess: ({ generatedSignal, params: successfulParams, lastClose, lastCandleTime }) => {
-          const timestamp = Date.now();
-          updateSignalGenerationState({
-            signal: generatedSignal,
-            currentPrice: lastClose,
-            lastDataTimestamp: lastCandleTime,
-            generationTimestamp: timestamp,
-          });
-          if (audioAlertsEnabled) playSound('new-signal');
-          
-          const newSignal: SavedSignal = {
-            ...generatedSignal,
-            id: crypto.randomUUID(),
-            symbol: successfulParams.symbol,
-            timeframe: successfulParams.timeframe,
-            timestamp,
-            status: 'Pending',
-            currentPrice: lastClose,
-            lastDataTimestamp: lastCandleTime ?? undefined,
-            type: 'Swing',
-            hitTps: [],
-          };
-          setSignalHistory(prev => [newSignal, ...prev]);
-        },
-        onError: (err) => {
-          updateSignalGenerationState({ error: err.message || 'An unknown error occurred.', signal: null });
+    try {
+      signalMutation.mutate(
+        { params: newFormData as UserParams, model },
+        {
+          onSuccess: ({ generatedSignal, params: successfulParams, lastClose, lastCandleTime }) => {
+            try {
+              const timestamp = Date.now();
+              updateSignalGenerationState({
+                signal: generatedSignal,
+                currentPrice: lastClose,
+                lastDataTimestamp: lastCandleTime,
+                generationTimestamp: timestamp,
+              });
+              if (audioAlertsEnabled) playSound('new-signal');
+
+              const newSignal: SavedSignal = {
+                ...generatedSignal,
+                id: crypto.randomUUID(),
+                symbol: successfulParams.symbol,
+                timeframe: successfulParams.timeframe,
+                timestamp,
+                status: 'Pending',
+                currentPrice: lastClose,
+                lastDataTimestamp: lastCandleTime ?? undefined,
+                type: 'Swing',
+                hitTps: [],
+              };
+              setSignalHistory(prev => [newSignal, ...prev]);
+            } catch (error) {
+              console.error('Error in onSuccess callback:', error);
+              updateSignalGenerationState({ error: 'Failed to process generated signal: ' + (error instanceof Error ? error.message : 'Unknown error') });
+            }
+          },
+          onError: (err) => {
+            try {
+              updateSignalGenerationState({ error: err.message || 'An unknown error occurred.', signal: null });
+            } catch (error) {
+              console.error('Error in onError callback:', error);
+              updateSignalGenerationState({ error: 'Failed to handle error: ' + (error instanceof Error ? error.message : 'Unknown error') });
+            }
+          }
         }
-      }
-    );
+      );
+    } catch (error) {
+      console.error('Error triggering signal generation:', error);
+      updateSignalGenerationState({ error: 'Failed to start signal generation: ' + (error instanceof Error ? error.message : 'Unknown error') });
+    }
   }, [signalGenFormDataFromStore, setSignalGenFormDataInStore, setCurrentPage, updateSignalGenerationState, signalMutation, audioAlertsEnabled, setSignalHistory]);
 
   const triggerScalpGeneration = useCallback((params: Partial<UserParams>, options?: { navigate?: boolean; extraData?: { orderBookData: OrderBookUpdate | null, liveTrades: LiveTrade[] } }) => {

@@ -1,6 +1,20 @@
 import { GoogleGenAI, FunctionDeclaration, Type } from "@google/genai";
 
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+// Define the type for import.meta.env to resolve TypeScript error
+declare global {
+  interface ImportMeta {
+    env: Record<string, string>;
+  }
+}
+
+// Get API key from environment - in browser, this will be processed by Vite
+const API_KEY = import.meta.env.VITE_GEMINI_API_KEY || import.meta.env.API_KEY;
+
+if (!API_KEY) {
+  console.error("Gemini API key is not set. Please set VITE_GEMINI_API_KEY in your .env file");
+}
+
+const ai = new GoogleGenAI({ apiKey: API_KEY || "" });
 
 export const SYSTEM_INSTRUCTION = `You are a helpful and expertly informed AI assistant for "Signal Gen," a sophisticated cryptocurrency trading application. Your primary role is to assist users by answering questions about the app's features, general trading concepts, risk management, and providing context-aware guidance.
 
