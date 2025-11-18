@@ -22,6 +22,21 @@ export default defineConfig(({ mode }) => {
         alias: {
           '@': path.resolve(__dirname, '.'),
         }
+      },
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: {
+              'react-vendor': ['react', 'react-dom'],
+              'ui-vendor': ['lucide-react'],
+              'chart-vendor': ['lightweight-charts', 'recharts'],
+              'data-vendor': ['@tanstack/react-query', 'zustand'],
+              'api-vendor': ['@supabase/supabase-js', '@google/genai'],
+            },
+          }
+        },
+        // Increase chunk size warning limit to avoid the 500kB warning
+        chunkSizeWarningLimit: 1000,
       }
     };
 });
