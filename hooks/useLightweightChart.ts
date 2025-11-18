@@ -175,5 +175,10 @@ export function useLightweightChart(
     }
   }, [data, chartType, showMA20, showMA200, showRSI]);
 
-  return { chart: chartRef.current, mainSeries: mainSeriesRef.current };
+  // We can't use React hooks (like useState) inside a custom hook definition like this.
+  // Instead, we'll just return chart and mainSeries directly
+  return {
+    chart: chartRef.current,
+    mainSeries: mainSeriesRef.current,
+  };
 }

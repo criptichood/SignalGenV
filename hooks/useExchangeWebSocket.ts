@@ -85,6 +85,7 @@ export function useExchangeWebSocket<T extends StreamType>({ exchange, symbol, t
     const reconnectTimeoutRef = useRef<number | null>(null);
     const onMessageRef = useRef(onMessage);
     const onConnectionErrorRef = useRef(onConnectionError);
+    const isUnmountingRef = useRef(false); // Track if component is unmounting to suppress notifications
 
     useEffect(() => { onMessageRef.current = onMessage; }, [onMessage]);
     useEffect(() => { onConnectionErrorRef.current = onConnectionError; }, [onConnectionError]);
@@ -137,14 +138,21 @@ export function useExchangeWebSocket<T extends StreamType>({ exchange, symbol, t
         };
 
         ws.onerror = () => {
-            onConnectionErrorRef.current?.(`Live data connection error for ${symbol}.`);
+            // Only show error notifications if not unmounting
+            if (!isUnmountingRef.current) {
+                onConnectionErrorRef.current?.(`Live data connection error for ${symbol}.`);
+            }
         };
 
         ws.onclose = (event) => {
             clearTimers();
-            if (wsRef.current && event.code !== 1000) {
-                onConnectionErrorRef.current?.(`Live data for ${symbol} disconnected. Reconnecting...`);
-                reconnectTimeoutRef.current = window.setTimeout(connect, RECONNECT_DELAY);
+            // Normal closure (1000) happens during unmounting, so don't show reconnect message
+            if (event.code !== 1000) {
+                // Show reconnection notification only if not unmounting
+                if (!isUnmountingRef.current) {
+                    onConnectionErrorRef.current?.(`Live data for ${symbol} disconnected. Reconnecting...`);
+                    reconnectTimeoutRef.current = window.setTimeout(connect, RECONNECT_DELAY);
+                }
             }
         };
     }, [exchange, symbol, type, interval, clearTimers]);
@@ -156,11 +164,23 @@ export function useExchangeWebSocket<T extends StreamType>({ exchange, symbol, t
 
         return () => {
             clearTimers();
+            isUnmountingRef.current = true; // Set flag when component is unmounting
             if (wsRef.current) {
                 wsRef.current.onclose = null; // Prevent reconnect on manual disconnect
                 wsRef.current.close(1000, "Component unmounting");
                 wsRef.current = null;
             }
+
+            // Clean up any pending reconnect attempts
+            if (reconnectTimeoutRef.current) {
+                clearTimeout(reconnectTimeoutRef.current);
+                reconnectTimeoutRef.current = null;
+            }
+
+            // Reset unmounting flag after a short delay
+            setTimeout(() => {
+                isUnmountingRef.current = false;
+            }, 100);
         };
     }, [enabled, symbol, exchange, type, interval, connect, clearTimers]);
 }

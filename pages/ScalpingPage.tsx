@@ -131,8 +131,8 @@ export default function ScalpingPage({
     const symbol = formData.symbol;
 
     if (exchange && symbol) {
-      // Check if we can reuse an existing connection
-      if (chartConnectionManager.isConnectionActive(exchange, symbol, '1m')) {
+      // Check if we can reuse an existing connection with a grace period to allow for smooth transitions
+      if (chartConnectionManager.isConnectionActiveWithGracePeriod(exchange, symbol, '1m', 500)) {
         const cachedData = chartConnectionManager.getCachedData(exchange, symbol, '1m');
         if (cachedData) {
           setChartData(cachedData);
@@ -160,16 +160,14 @@ export default function ScalpingPage({
     }
   }, [formData.exchange, formData.symbol, klineWebSocket, chartData]);
 
-  // Handle chart loading state with transition
+  // Handle chart loading state with transition - extend the loading time slightly for smoother transitions
   useEffect(() => {
-    setIsChartLoading(isChartLoadingInitial);
+    setIsChartLoading(true);
 
-    // Add a small delay to allow transitions to complete
+    // Add a small delay to ensure smooth transitions between pages
     const timer = setTimeout(() => {
-      if (isChartLoadingInitial) {
-        setIsChartLoading(false);
-      }
-    }, 150);
+      setIsChartLoading(isChartLoadingInitial);
+    }, 200); // 200ms delay helps smoothen page transitions
 
     return () => clearTimeout(timer);
   }, [isChartLoadingInitial]);

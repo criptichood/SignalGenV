@@ -165,6 +165,18 @@ class ChartConnectionManager {
   }
 
   /**
+   * Get connection status with a grace period to allow for transition delay
+   */
+  isConnectionActiveWithGracePeriod(exchange: string, symbol: string, timeframe: string, graceMs: number = 300): boolean {
+    const key = this.generateKey(exchange, symbol, timeframe);
+    const connection = this.connections.get(key);
+    if (connection && connection.subscriptionCount > 0) {
+      return (Date.now() - connection.lastUpdated) < graceMs;
+    }
+    return false;
+  }
+
+  /**
    * Count active subscriptions for a connection
    */
   getSubscriptionCount(exchange: string, symbol: string, timeframe: string): number {

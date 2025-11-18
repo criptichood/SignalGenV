@@ -267,7 +267,14 @@ export const LivePriceChart = ({
             <p className="mt-4 text-lg text-gray-300">Loading live chart data...</p>
           </div>
         )}
-        <div ref={chartContainerRef} className="h-full w-full" style={{ visibility: isLoading ? 'hidden' : 'visible' }}/>
+        <div ref={chartContainerRef} className="h-full w-full relative">
+          {isLoading && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-gray-900/70 z-10 rounded-lg">
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-cyan-500 mb-4"></div>
+              <p className="text-lg text-gray-300">Loading chart data...</p>
+            </div>
+          )}
+        </div>
         {oneClickTradingEnabled && (
           <OneClickTradeBar
             margin={oneClickTradeMargin ?? 50}
