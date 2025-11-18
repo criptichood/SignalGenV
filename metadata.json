@@ -1,0 +1,5 @@
+{
+  "name": "Signal Gen",
+  "description": "A web application to generate cryptocurrency trading signals by analyzing market data with various AI models.",
+  "requestFramePermissions": []
+}

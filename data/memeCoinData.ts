@@ -1,0 +1,128 @@
+import type { MemeCoin } from '@/types';
+
+const now = Date.now();
+const oneHour = 1000 * 60 * 60;
+const oneDay = oneHour * 24;
+
+export const MOCK_MEME_COINS: MemeCoin[] = [
+  {
+    id: 'sol-1',
+    address: 'So11111111111111111111111111111111111111112',
+    chain: 'SOL',
+    symbol: 'PEPEWIF',
+    name: 'Pepe With Hat',
+    price: 0.0001234,
+    priceChange24h: 125.6,
+    volume24h: 12500000,
+    liquidity: 850000,
+    marketCap: 12340000,
+    hypeScore: 92,
+    launchDate: now - oneDay * 2,
+    safetyMetrics: {
+      isLiquidityLocked: true,
+      isContractVerified: true,
+      isMintDisabled: true,
+      top10HolderPercent: 8.5,
+    },
+  },
+  {
+    id: 'sol-2',
+    address: 'So11111111111111111111111111111111111111113',
+    chain: 'SOL',
+    symbol: 'GENBOT',
+    name: 'Signal Gen Bot',
+    price: 0.015,
+    priceChange24h: -15.2,
+    volume24h: 2300000,
+    liquidity: 450000,
+    marketCap: 15000000,
+    hypeScore: 68,
+    launchDate: now - oneDay * 7,
+    safetyMetrics: {
+      isLiquidityLocked: true,
+      isContractVerified: true,
+      isMintDisabled: true,
+      top10HolderPercent: 12.1,
+    },
+  },
+  {
+    id: 'bnb-1',
+    address: '0x1234567890123456789012345678901234567890',
+    chain: 'BNB',
+    symbol: 'BNBFrog',
+    name: 'BNB Frog',
+    price: 0.00000089,
+    priceChange24h: 450.1,
+    volume24h: 8900000,
+    liquidity: 300000,
+    marketCap: 8900000,
+    hypeScore: 85,
+    launchDate: now - oneDay * 1,
+    safetyMetrics: {
+      isLiquidityLocked: true,
+      isContractVerified: true,
+      isMintDisabled: false, // Potential risk
+      top10HolderPercent: 22.5, // Potential risk
+    },
+  },
+  {
+    id: 'sol-3',
+    address: 'So11111111111111111111111111111111111111114',
+    chain: 'SOL',
+    symbol: 'NEKO',
+    name: 'Neko Cat',
+    price: 0.002,
+    priceChange24h: 33.7,
+    volume24h: 4500000,
+    liquidity: 600000,
+    marketCap: 20000000,
+    hypeScore: 75,
+    launchDate: now - oneDay * 5,
+    safetyMetrics: {
+      isLiquidityLocked: true,
+      isContractVerified: true,
+      isMintDisabled: true,
+      top10HolderPercent: 9.8,
+    },
+  },
+  {
+    id: 'bnb-2',
+    address: '0xabcde1234567890abcde1234567890abcde12345',
+    chain: 'BNB',
+    symbol: 'SAFEGEM',
+    name: 'Safe Gem',
+    price: 0.000000012,
+    priceChange24h: -5.8,
+    volume24h: 500000,
+    liquidity: 150000,
+    marketCap: 1200000,
+    hypeScore: 45,
+    launchDate: now - oneDay * 14,
+    safetyMetrics: {
+      isLiquidityLocked: false, // Potential risk
+      isContractVerified: true,
+      isMintDisabled: true,
+      top10HolderPercent: 18.0, // Potential risk
+    },
+  },
+    {
+    id: 'sol-4',
+    address: 'So11111111111111111111111111111111111111115',
+    chain: 'SOL',
+    symbol: 'WEN',
+    name: 'Wen Token',
+    price: 0.00011,
+    priceChange24h: 8.2,
+    volume24h: 35000000,
+    liquidity: 2100000,
+    marketCap: 75000000,
+    hypeScore: 88,
+    launchDate: now - oneDay * 30,
+    safetyMetrics: {
+      isLiquidityLocked: true,
+      isContractVerified: true,
+      isMintDisabled: true,
+      top10HolderPercent: 5.1,
+    },
+  },
+];
