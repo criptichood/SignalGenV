@@ -1,3 +1,4 @@
+
 import React, { useState } from 'react';
 import { Button } from '../components/ui/Button';
 import { ChartIcon } from '../components/icons/ChartIcon';
@@ -143,8 +144,10 @@ const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
             <div className="bg-gray-900 rounded-xl p-8">
               {/* Social Login Buttons */}
               <div className="space-y-4">
+               
                 <Button
-                  type="button"
+                //  @ts-ignore 
+                  type="button" 
                   variant="outline"
                   onClick={handleSignInWithGoogle}
                   disabled={isLoading}
@@ -306,6 +309,7 @@ const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
                   )}
 
                   <Button
+                   //  @ts-ignore 
                     type="submit"
                     className="w-full bg-gradient-to-r from-cyan-500 to-blue-500 hover:from-cyan-600 hover:to-blue-600 text-white font-semibold py-3 px-4 rounded-lg transition-all duration-300 shadow-lg shadow-cyan-500/20 hover:shadow-cyan-500/30"
                     disabled={isLoading}

@@ -84,7 +84,7 @@ export default function App() {
   // Initialize session on app load
   useEffect(() => {
     sessionManager.initializeSession();
-  }, []);
+  }, []); // Empty dependency array to run only once
 
   // Apply theme changes to the DOM
   useEffect(() => {

@@ -8,6 +8,7 @@ const variants = {
 
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: keyof typeof variants;
+  children?: React.ReactNode;
 }
 
 export const Button = ({ className, children, variant = 'default', ...props }: ButtonProps) => {
