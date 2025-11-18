@@ -191,6 +191,24 @@ export const supabaseService = {
       return { profile: null, error: error as Error };
     }
   },
+
+  /**
+   * Sign in anonymously
+   */
+  async signInAnonymously(): Promise<{ user: User | null; error: Error | null }> {
+    try {
+      const { data, error } = await supabase.auth.signInAnonymously();
+
+      if (error) {
+        throw error;
+      }
+
+      return { user: data.user, error: null };
+    } catch (error) {
+      console.error('Anonymous sign in error:', error);
+      return { user: null, error: error as Error };
+    }
+  },
 };
 
 export default supabaseService;

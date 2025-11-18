@@ -66,16 +66,32 @@ export default function App() {
   const currentUser = useMemo(() => {
     // If we have an authenticated user from Supabase, create a basic profile
     if (user) {
-      return {
-        username: user.user_metadata?.user_name || user.email?.split('@')[0] || user.id,
-        name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
-        bio: user.user_metadata?.bio || 'AI Trading Enthusiast',
-        avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
-        joinedAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
-        followers: [],
-        following: [],
-        isVerified: false,
-      };
+      // Check if this is an anonymous user (no email or identifiable info)
+      if (!user.email && !user.user_metadata?.email) {
+        // For anonymous users, use the user ID as the identifier
+        return {
+          username: `user_${user.id.substring(0, 8)}`, // Use first 8 chars of user ID
+          name: `Guest ${user.id.substring(0, 4)}`, // Use first 4 chars of user ID
+          bio: 'AI Trading Enthusiast',
+          avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
+          joinedAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
+          followers: [],
+          following: [],
+          isVerified: false,
+        };
+      } else {
+        // For regular users (with email or metadata), use existing logic
+        return {
+          username: user.user_metadata?.user_name || user.email?.split('@')[0] || user.id,
+          name: user.user_metadata?.name || user.user_metadata?.full_name || user.email?.split('@')[0] || 'User',
+          bio: user.user_metadata?.bio || 'AI Trading Enthusiast',
+          avatarUrl: user.user_metadata?.avatar_url || user.user_metadata?.picture || undefined,
+          joinedAt: user.created_at ? new Date(user.created_at).getTime() : Date.now(),
+          followers: [],
+          following: [],
+          isVerified: false,
+        };
+      }
     }
     // Fallback to mock user if no authenticated user
     return users?.find(u => u.username === 'CryptoTrader123') || null;

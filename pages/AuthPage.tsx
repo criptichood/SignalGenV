@@ -327,6 +327,45 @@ const AuthPage = ({ onAuthSuccess }: AuthPageProps) => {
                     )}
                   </Button>
                 </form>
+
+                {/* Anonymous login option */}
+                <div className="mt-6">
+                  <div className="relative my-6">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-gray-700"></div>
+                    </div>
+                    <div className="relative flex justify-center text-sm">
+                      <span className="px-4 bg-gray-900 text-gray-400">Or</span>
+                    </div>
+                  </div>
+
+                  <Button
+                  //  @ts-ignore 
+                    type="button"
+                    variant="outline"
+                    onClick={async () => {
+                      setError('');
+                      setIsLoading(true);
+                      try {
+                        const result = await supabaseService.signInAnonymously();
+                        if (result.error) {
+                          setError(result.error.message);
+                        } else {
+                          onAuthSuccess();
+                        }
+                      } catch (err: any) {
+                        setError(err.message || 'An error occurred during anonymous authentication.');
+                      } finally {
+                        setIsLoading(false);
+                      }
+                    }}
+                    disabled={isLoading}
+                    className="w-full bg-gray-800/50 hover:bg-gray-800 border-gray-700 text-gray-200 transition-all duration-300 flex items-center justify-center gap-3 group"
+                  >
+                    <span className="font-medium">Continue as Guest</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  </Button>
+                </div>
               </div>
 
               {/* Toggle View */}

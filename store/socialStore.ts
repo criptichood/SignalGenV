@@ -179,9 +179,13 @@ export const useSocialStore = create<SocialState>()(
         if (!currentUserUsername) return;
 
         // Find current user in local state to get name/avatar
+        // Check if this is an anonymous user (no email or identifiable info)
+        const isAnonymousUser = !currentAuthUser.email && !currentAuthUser.user_metadata?.email;
         const currentUser = users?.find(u => u.username === currentUserUsername) || {
           username: currentUserUsername,
-          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          name: isAnonymousUser
+            ? `Guest ${currentAuthUser.id.substring(0, 4)}`
+            : currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
           avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
         };
 
@@ -241,9 +245,12 @@ export const useSocialStore = create<SocialState>()(
         if (!currentUserUsername) return;
 
         const originalPost = postToRepost.repostOf || postToRepost;
+        const isAnonymousUser = !currentAuthUser.email && !currentAuthUser.user_metadata?.email;
         const currentAuthUserInState = get().users?.find(u => u.username === currentUserUsername) || {
           username: currentUserUsername,
-          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          name: isAnonymousUser
+            ? `Guest ${currentAuthUser.id.substring(0, 4)}`
+            : currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
           avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
         };
 
@@ -288,9 +295,12 @@ export const useSocialStore = create<SocialState>()(
         const currentUserUsername = currentAuthUser.user_metadata?.user_name || currentAuthUser.email?.split('@')[0] || currentAuthUser.id;
         if (!currentUserUsername) return;
 
+        const isAnonymousUser = !currentAuthUser.email && !currentAuthUser.user_metadata?.email;
         const currentAuthUserInState = get().users?.find(u => u.username === currentUserUsername) || {
           username: currentUserUsername,
-          name: currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
+          name: isAnonymousUser
+            ? `Guest ${currentAuthUser.id.substring(0, 4)}`
+            : currentAuthUser.user_metadata?.name || currentAuthUser.user_metadata?.full_name || currentUserUsername,
           avatarUrl: currentAuthUser.user_metadata?.avatar_url || currentAuthUser.user_metadata?.picture || undefined,
         };
 
