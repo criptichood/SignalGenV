@@ -27,7 +27,7 @@ interface ScalpingPageProps {
 }
 
 const MAX_CHART_CANDLES = 1440;
-const MAX_LIVE_TRADES = 50;
+const MAX_LIVE_TRADES = 20;
 
 const formatCurrency = (value: number) => value.toLocaleString('en-US', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 6 });
 

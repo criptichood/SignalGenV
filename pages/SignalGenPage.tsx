@@ -27,7 +27,7 @@ interface SignalGenPageProps {
 }
 
 const MAX_CHART_CANDLES = 1440;
-const MAX_LIVE_TRADES = 50;
+const MAX_LIVE_TRADES = 20;
 
 export default function SignalGenPage({
   bybitApiKey,
@@ -131,11 +131,13 @@ export default function SignalGenPage({
 
       // Register the connection when it's active
       const unsubscribe = () => {
+        // @ts-ignore
         klineWebSocket && klineWebSocket();
       };
       chartConnectionManager.registerConnection(exchange, symbol, '1m', chartData, unsubscribe);
 
       // Update connection status
+      // @ts-ignore
       if (klineWebSocket) {
         chartConnectionManager.activateConnection(exchange, symbol, '1m');
       } else {
